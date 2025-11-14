@@ -1,16 +1,13 @@
 pipeline {
-    // משתמש ב‑Docker agent עם Python
-    agent {
-        docker { image 'python:3.12' }
-    }
+    agent any
 
     environment {
-        // Credentials IDs כפי שהכנסנו ב-Jenkins
         DOCKERHUB_CRED = 'dockerhub-creds'
         APP_SERVER_SSH = 'ssh-app-server'
-        APP_SERVER_IP  = '98.92.159.105'  // כתובת App EC2 שלך
+        APP_SERVER_IP  = '98.92.159.105'
         APP_CONTAINER  = 'my-python-app'
         DOCKER_IMAGE   = 'davidchay123/my-python-app:latest'
+        VENV_DIR       = "$WORKSPACE/venv"
     }
 
     stages {
@@ -22,9 +19,20 @@ pipeline {
             }
         }
 
+        stage('Setup Python Env') {
+            steps {
+                sh '''
+                python3 -m venv $VENV_DIR
+                source $VENV_DIR/bin/activate
+                pip install --upgrade pip
+                '''
+            }
+        }
+
         stage('Lint') {
             steps {
                 sh '''
+                source $VENV_DIR/bin/activate
                 pip install flake8
                 flake8 .
                 '''
@@ -34,6 +42,7 @@ pipeline {
         stage('Unit Tests') {
             steps {
                 sh '''
+                source $VENV_DIR/bin/activate
                 pip install -r requirements.txt pytest
                 pytest tests/
                 '''
