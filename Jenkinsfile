@@ -7,7 +7,6 @@ pipeline {
         APP_SERVER_IP  = '98.92.159.105'
         APP_CONTAINER  = 'my-python-app'
         DOCKER_IMAGE   = 'davidchay123/my-python-app:latest'
-        DOCKER_BIN     = '/usr/bin/docker'  // כאן נציין את הנתיב המלא ל-docker
     }
     
     stages {
@@ -21,7 +20,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 dir('app') {
-                    sh "${DOCKER_BIN} build -t ${DOCKER_IMAGE} ."
+                    sh "docker build -t ${DOCKER_IMAGE} ."
                 }
             }
         }
@@ -31,10 +30,10 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: DOCKERHUB_CRED,
                                                  usernameVariable: 'USERNAME',
                                                  passwordVariable: 'PASSWORD')]) {
-                    sh """
-                        echo \$PASSWORD | ${DOCKER_BIN} login -u \$USERNAME --password-stdin
-                        ${DOCKER_BIN} push ${DOCKER_IMAGE}
-                    """
+                    sh '''
+                        echo $PASSWORD | docker login -u $USERNAME --password-stdin
+                        docker push ${DOCKER_IMAGE}
+                    '''
                 }
             }
         }
@@ -44,11 +43,15 @@ pipeline {
                 sshagent([APP_SERVER_SSH]) {
                     sh """
                         ssh -o StrictHostKeyChecking=no ubuntu@${APP_SERVER_IP} '
-                            export PATH=\$PATH:/usr/bin &&
-                            ${DOCKER_BIN} pull ${DOCKER_IMAGE} &&
-                            ${DOCKER_BIN} stop ${APP_CONTAINER} || true &&
-                            ${DOCKER_BIN} rm ${APP_CONTAINER} || true &&
-                            ${DOCKER_BIN} run -d --name ${APP_CONTAINER} -p 80:5000 ${DOCKER_IMAGE}
+                            if ! command -v docker >/dev/null 2>&1; then
+                                echo "Docker is not installed on the server!"
+                                exit 1
+                            fi
+                            
+                            docker pull ${DOCKER_IMAGE} &&
+                            docker stop ${APP_CONTAINER} || true &&
+                            docker rm ${APP_CONTAINER} || true &&
+                            docker run -d --name ${APP_CONTAINER} -p 80:5000 ${DOCKER_IMAGE}
                         '
                     """
                 }
@@ -67,7 +70,7 @@ pipeline {
             echo 'Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed!'
+            echo 'Pipeline failed! Please check if Docker is installed and accessible on the app server.'
         }
     }
 }
